@@ -74,6 +74,42 @@ fig_time = px.line(
     markers=True
 )
 
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
+# Prepare data
+sales_over_time['date_ordinal'] = sales_over_time[
+    'movements/movement_date'
+].map(datetime.toordinal)
+
+X = sales_over_time[['date_ordinal']]
+y = sales_over_time['movements/released']
+
+model = LinearRegression()
+model.fit(X, y)
+
+# Create future dates
+future_dates = pd.date_range(
+    sales_over_time['movements/movement_date'].max(),
+    periods=30
+)
+
+future_ordinals = future_dates.map(datetime.toordinal)
+future_pred = model.predict(np.array(future_ordinals).reshape(-1, 1))
+
+future_df = pd.DataFrame({
+    'movements/movement_date': future_dates,
+    'forecast': future_pred
+})
+
+fig_time.add_scatter(
+    x=future_df['movements/movement_date'],
+    y=future_df['forecast'],
+    mode='lines',
+    name='30 Day Forecast'
+)
+
+
 st.plotly_chart(fig_time, use_container_width=True)
 
 # ========================
@@ -115,3 +151,98 @@ latest_stock = (
 )
 
 st.dataframe(latest_stock, use_container_width=True)
+
+
+
+#====
+st.subheader(" Stock Depletion PRediction")
+avg_daily_sales = (
+    filtered_df
+    .groupby(['items/brand', 'items/design_name'])
+    ['movements/released']
+    .mean()
+    .reset_index()
+    .rename(columns={'movements/released': 'avg_daily_sales'})
+)
+
+stock_df = latest_stock.merge(
+    avg_daily_sales,
+    on=['items/brand', 'items/design_name']
+)
+
+stock_df['days_until_stockout'] = (
+    stock_df['movements/new_stock'] /
+    stock_df['avg_daily_sales']
+)
+
+st.dataframe(
+    stock_df.sort_values('days_until_stockout')
+)
+
+#====
+# ========================
+# Demand Trend Classification
+# ========================
+
+st.subheader("📊 Demand Trend (Last 30 vs Previous 30 Days)")
+
+max_date = filtered_df['movements/movement_date'].max()
+
+# Last 30 days
+recent = filtered_df[
+    filtered_df['movements/movement_date'] >
+    max_date - pd.Timedelta(days=30)
+]
+
+# Previous 30 days
+previous = filtered_df[
+    (filtered_df['movements/movement_date'] <= max_date - pd.Timedelta(days=30)) &
+    (filtered_df['movements/movement_date'] > max_date - pd.Timedelta(days=60))
+]
+
+# Aggregate sales
+recent_sales = (
+    recent
+    .groupby(['items/brand', 'items/design_name'])['movements/released']
+    .sum()
+    .reset_index()
+    .rename(columns={'movements/released': 'recent_sales'})
+)
+
+previous_sales = (
+    previous
+    .groupby(['items/brand', 'items/design_name'])['movements/released']
+    .sum()
+    .reset_index()
+    .rename(columns={'movements/released': 'previous_sales'})
+)
+
+# Merge both periods
+trend_df = pd.merge(
+    recent_sales,
+    previous_sales,
+    on=['items/brand', 'items/design_name'],
+    how='outer'
+).fillna(0)
+
+# Calculate growth
+trend_df['growth_rate'] = (
+    (trend_df['recent_sales'] - trend_df['previous_sales']) /
+    trend_df['previous_sales'].replace(0, 1)
+)
+
+# Classify trend
+def classify_trend(growth):
+    if growth > 0.2:
+        return "🔥 Rising"
+    elif growth < -0.2:
+        return "📉 Declining"
+    else:
+        return "➖ Stable"
+
+trend_df['trend'] = trend_df['growth_rate'].apply(classify_trend)
+
+# Sort by growth
+trend_df = trend_df.sort_values(by='growth_rate', ascending=False)
+
+st.dataframe(trend_df, use_container_width=True)
