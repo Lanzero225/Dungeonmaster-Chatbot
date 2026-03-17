@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { projects } from "./projects.js";
+import { projects } from "./projects.ts";
 
 const sdgs = [
   "No Poverty","Zero Hunger","Good Health","Quality Education","Gender Equality",
