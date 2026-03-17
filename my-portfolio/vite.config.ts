@@ -8,6 +8,6 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
-    base: '/Personal-Website/',
+    base: '/Personal-Website/'
 
 })
