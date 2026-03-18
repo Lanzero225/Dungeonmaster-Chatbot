@@ -8,6 +8,6 @@ export default defineConfig({
     react(),
     babel({ presets: [reactCompilerPreset()] })
   ],
-    base: '/Personal-Website/'
+    base: process.env.VITE_BASE_PATH || "/My-Portfolio",
 
 })
